@@ -44,7 +44,7 @@ int idx=1;
 int fenetre;
 int t=0;
 //globales variables addresse
-  unsigned int a;
+  unsigned int a=0;
   unsigned int ok=0;
   int b;
   unsigned int x=2;
@@ -63,7 +63,6 @@ void setup() {
   time = millis();
   time = millis() - time;
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
-  a= EEPROM.read(addr);
 }
 
 uint8_t i=0;
@@ -79,27 +78,40 @@ while (compteur/60==idx){
 while(bouton==1){
   t++;
   if(t==20){
-   // ok=0;
+    ok=0;
 }break;
 t=0;
 }
 switch(menu)
 {
 case 0:
+  lcd.setCursor(1, 0);
+  lcd.print("Initialisation");
+  lcd.setCursor(0, 1);
+  lcd.print("100%");
   initialisation();
   break; 
 //-------------MENU 1 Régler add Lora
 case 1:
+if(ok==0){
+  x=2;
+  lcd.setCursor(0, 0);
+  lcd.print("Entrer Add Lora: ");
+  lcd.setCursor(0, 1);
+  lcd.print("Ox");
+  adresse();
+}
+else{
   lcd.setCursor(0, 0);
   lcd.print("Votre Add Lora: ");
   lcd.setCursor(0, 1);
   lcd.print("Ox");
   lcd.print(a);
-
+}
   break;
  //-------------MENU 2 TEMP + DEBIT  
 case 2: 
- 
+  ok=1;
   lcd.setCursor(0, 0);
   lcd.print("Temp : ");
   lcd.print(DS18B20_temperature);
@@ -108,25 +120,8 @@ case 2:
   lcd.print("Debit: ");
   debit();
   break;
-
-case 3:
-  x=2;
-  lcd.setCursor(0, 0);
-  lcd.print("Entrer Add Lora: ");
-  lcd.setCursor(0, 1);
-  lcd.print("Ox");
-  adresse();
-  break;
-case 4:
-  lcd.setCursor(0, 0);
-  lcd.print(" Reset en cours ");
-  lcd.setCursor(0, 1);
-  lcd.print("Patientez...");
-  clearrom();
-  lcd.clear();
-  menu=3;
-  break;
 }
+//case 3:
 
 //-----------SWITCH MENUS---------------
   uint8_t buttons = lcd.readButtons();
@@ -135,60 +130,47 @@ case 4:
 
 switch(bouton){
   case 1: // SELECT
-      menu=4;
-
- /**      if(bouton==1&&t>20){
+      
+       if(bouton==1&&t>20){
        ok==0;
        t=0;
        }
- /**     else{
+      else{
       lcd.clear();
       menu++;
       if (menu>3){
         menu=0;
-        }
- **/    
+      }
       
     break;
-    
+    }
   case 2: // RIGHT
     //  lcd.setCursor(0, 1);
    // lcd.print("Right ");
-    /** if (menu==0){
+     if (menu==0){
       x++;
-    }**/
-    menu++;
-       if (menu>2){
-        menu=1;
-      }
-    lcd.clear();
+    }
     break;
   case 4: // DOWN
     //lcd.setCursor(0, 1);
    // lcd.print("Down ");
-     if (menu==3&&x==2&&ok==0){
+     if (menu==1&&x==2&&ok==0){
     a--;
   }
     break;
   case 8:// UP
   //  lcd.setCursor(0, 1);
   //  lcd.print("UP   ");
-  if (menu==3&&x==2&&ok==0){
+  if (menu==1&&x==2&&ok==0){
     a++;
   }
     break;
   case 16: // LEFT
    // lcd.setCursor(0, 1);
     //lcd.print("Left");
-   /**  if (menu==0){
+     if (menu==0){
       x--;
-    } **/
-    menu--;
-    if (menu<1){
-        menu=2;
-      }
-
-    lcd.clear();
+    }
     break;  
 }
 
@@ -247,7 +229,6 @@ void adresse(){
     }
     rom();
     lcd.print(a);
-    lcd.print(" (1-99)");
   }
   else
   lcd.print("__ (1-99)");
@@ -258,48 +239,20 @@ void adresse(){
   
 }
 void initialisation(){ 
-  lcd.setCursor(1, 0);
-  lcd.print("Initialisation");
-  lcd.setCursor(6, 1);
-  lcd.print("10%");
-  delay(1000);
-  lcd.setCursor(6, 1);
-  lcd.print("20%");
-  delay(1000);
-    lcd.setCursor(6, 1);
-    lcd.print("30%");
-  delay(1000);
-    lcd.setCursor(6, 1);
-    lcd.print("40%");
-  delay(1000);
-    lcd.setCursor(6, 1);
-    lcd.print("50%");
-  delay(1000);
-    lcd.setCursor(6, 1);
-    lcd.print("100%");
-  delay(1000);
-  lcd.clear();
-  menu=1;
-/**  lcd.print(bouton);
+  lcd.print(bouton);
   lcd.print("->");
   lcd.print(t);
-  **/
 }
 void debit(){
-  lcd.print("");
-  lcd.print("test");
+  lcd.print(" ");
+  lcd.print(b);
 }
 void rom(){
   
-  b=byte(a);
-  EEPROM.update(addr, b);
+ /** b=byte(a);
+  EEPROM.write(addr, b);
   delay(10);
-  
+  a= EEPROM.read(addr);
+  **/
 }
-void clearrom(){
-    for (int i = 0 ; i < EEPROM.length() ; i++) {
-     EEPROM.write(i, 0);
-   }
-}
-
 
