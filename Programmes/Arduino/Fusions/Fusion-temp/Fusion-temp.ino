@@ -14,6 +14,17 @@ When a button is pressed, the backlight changes color.
 #include <utility/Adafruit_MCP23017.h>
 #include <EEPROM.h>
 
+#include <SPI.h>
+#include <RH_RF95.h>
+
+#define RFM95_CS 40     //chip select
+#define RFM95_RST 41    // pins Lora
+#define RFM95_INT 19    // interrupt
+
+#define RF95_FREQ 915.0
+
+// Singleton instance of the radio driver
+RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
 // The shield uses the I2C SCL and SDA pins. On classic Arduinos
 // this is Analog 4 and 5 so you can't use those for analogRead() anymore
@@ -58,7 +69,39 @@ int t=0;
 void setup() {
   // Debugging output
   pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
+  pinMode(RFM95_RST, OUTPUT);
+  digitalWrite(RFM95_RST, HIGH);
   Serial.begin(SERIAL_PORT);
+
+  
+  Serial.println("Arduino LoRa TX Test!");
+    // manual reset
+  digitalWrite(RFM95_RST, LOW);
+  delay(10);
+  digitalWrite(RFM95_RST, HIGH);
+  delay(10);
+    while (!rf95.init()) {
+    Serial.println("LoRa radio init failed"); //initialisation si erreur
+    while (1);
+  }
+  Serial.println("LoRa radio init OK!"); //OKK
+
+  // Defaults after init are 434.0MHz, modulation GFSK_Rb250Fd250, +13dbM
+  if (!rf95.setFrequency(RF95_FREQ)) {
+    Serial.println("setFrequency failed"); //frequence erreur
+    while (1);
+  }
+  Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
+  
+  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
+
+  // The default transmitter power is 13dBm, using PA_BOOST.
+  // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
+  // you can set transmitter powers from 5 to 23 dBm:
+  rf95.setTxPower(23, false);
+
+int16_t packetnum = 0;  // packet counter, we increment per xmission
+
   Serial.println("Initialisation du programme");
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
@@ -72,15 +115,18 @@ void setup() {
 
   attachInterrupt(0, rpm, RISING); //and the interrupt is attached
 }
-
+int16_t packetnum = 0;  // packet counter, we increment per xmission
 uint8_t i=0;
-void loop() {
-  debit();
+
+
+void loop() {   // DEBUT BOUCLE
+ // debit();
   // print the number of seconds since reset:
 
     compteur=(millis()/1000);
 while (compteur/60==idx){
     DS18B20_temperature = getTemperatureDS18b20();  // Actualisation toutes les 60s de l'acquisition de la temp
+   // envoitrame();
     idx++;
   break;
 }
@@ -165,11 +211,7 @@ switch(bouton){
     break;
     
   case 2: // RIGHT
-    //  lcd.setCursor(0, 1);
-   // lcd.print("Right ");
-    /** if (menu==0){
-      x++;
-    }**/
+    envoitrame();
     menu++;
        if (menu>2){
         menu=1;
@@ -298,13 +340,13 @@ void initialisation(){
   lcd.print(t);
   **/
 }
-void debit(){
+/**void debit(){
   NbTopsFan = 0;   //Set NbTops to 0 ready for calculations
   sei();      //Enables interrupts
   delay (1000);   //Wait 1 second
         //Disable interrupts
   Calc = (NbTopsFan/ 5.5); //(Pulse frequency) / 5.5Q, = flow rate 
-}
+} **/
 void rom(){
   
   b=byte(a);
@@ -323,3 +365,57 @@ void rpm ()     //This is the function that the interupt calls
  
 //hall effect sensors signal;
 }
+void envoitrame(){
+    Serial.println("Sending to rf95_server");
+        String str1=String(a);
+    String str2=String(Calc);
+    String str3=String(DS18B20_temperature);
+    String str=String(";")+str1+";"+str2+";"+str3;
+    
+    Serial.print("Taille: a -> ");
+    Serial.println(sizeof(a));
+        Serial.print("Taille: Temp -> ");
+        Serial.println(sizeof(DS18B20_temperature));
+            Serial.print("Taille: Niveau -> ");
+            Serial.println(sizeof(Calc));
+            
+    char radiopacket[20] = "";
+   
+   str.toCharArray (radiopacket, 20); 
+    itoa(packetnum++, radiopacket+13, 10);
+    
+    Serial.print("Envoi Donnees: "); Serial.println(radiopacket);
+    radiopacket[19] = 0;
+     Serial.println("Envoi en cours..."); delay(10);
+  rf95.send((uint8_t *)radiopacket, 30);
+
+  Serial.println("En attente du transfert..."); delay(10);
+  rf95.waitPacketSent();
+  // Now wait for a reply
+  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+  uint8_t len = sizeof(buf);
+
+  Serial.println("En attente de la reponse..."); delay(10);
+  if (rf95.waitAvailableTimeout(1000))
+  { 
+    // Should be a reply message for us now   
+    if (rf95.recv(buf, &len))
+   {
+      Serial.print("Message recu: ");
+      Serial.println((char*)buf);
+      Serial.print("RSSI: ");
+      Serial.println(rf95.lastRssi(), DEC);    
+    }
+    else
+    {
+      Serial.println("Message non recu");
+    }
+  }
+  else
+  {
+    Serial.println("No reply, is there a listener around?");
+  }
+  delay(1000);
+}
+
+
