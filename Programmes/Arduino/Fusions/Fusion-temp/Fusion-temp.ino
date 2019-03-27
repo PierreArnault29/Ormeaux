@@ -126,7 +126,7 @@ void loop() {   // DEBUT BOUCLE
     compteur=(millis()/1000);
 while (compteur/60==idx){
     DS18B20_temperature = getTemperatureDS18b20();  // Actualisation toutes les 60s de l'acquisition de la temp
-   // envoitrame();
+    envoitrame();
     idx++;
   break;
 }
@@ -211,7 +211,7 @@ switch(bouton){
     break;
     
   case 2: // RIGHT
-    envoitrame();
+    //envoitrame();
     menu++;
        if (menu>2){
         menu=1;
@@ -367,10 +367,15 @@ void rpm ()     //This is the function that the interupt calls
 }
 void envoitrame(){
     Serial.println("Sending to rf95_server");
-        String str1=String(a);
+    String str1=String(a);
     String str2=String(Calc);
     String str3=String(DS18B20_temperature);
     String str=String(";")+str1+";"+str2+";"+str3;
+    
+    char buffer[30];
+    char *tab = buffer;
+    Serial.print("Taille du TAB: ");
+    Serial.println(sizeof(tab)); 
     
     Serial.print("Taille: a -> ");
     Serial.println(sizeof(a));
