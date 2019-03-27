@@ -1,89 +1,127 @@
+#include <LCD.h>
+#include <LiquidCrystal_SR.h>
+#include <LiquidCrystal.h>
+LiquidCrystal_SR lcd(10, 8, 9); 
+            //  DATA CLOCK LATCH
 
-#include "LiquidCrystal.h"
-LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
+byte statusLed    = 13;
 
-// which pin to use for reading the sensor? can use any pin!
-#define FLOWSENSORPIN 23
+byte sensorInterrupt = 0;  // 0 = digital pin 2
+byte sensorPin       = 2;
 
-// count how many pulses!
-volatile uint16_t pulses = 0;
-// track the state of the pulse pin
-volatile uint8_t lastflowpinstate;
-// you can try to keep time of how long it is between pulses
-volatile uint32_t lastflowratetimer = 0;
-// and use that to calculate a flow rate
-volatile float flowrate;
-// Interrupt is called once a millisecond, looks for any pulses from the sensor!
-SIGNAL(TIMER0_COMPA_vect) {
-  uint8_t x = digitalRead(FLOWSENSORPIN);
+// The hall-effect flow sensor outputs approximately 4.5 pulses per second per
+// litre/minute of flow.
+float calibrationFactor = 4.5;
+
+volatile byte pulseCount;  
+
+float flowRate;
+unsigned int flowMilliLitres;
+unsigned long totalMilliLitres;
+
+unsigned long oldTime;
+
+
+
+void setup()
+{
   
-  if (x == lastflowpinstate) {
-    lastflowratetimer++;
-    return; // nothing changed!
-  }
-  
-  if (x == HIGH) {
-    //low to high transition!
-    pulses++;
-  }
-  lastflowpinstate = x;
-  flowrate = 1000.0;
-  flowrate /= lastflowratetimer;  // in hertz
-  lastflowratetimer = 0;
-}
-
-void useInterrupt(boolean v) {
-  if (v) {
-    // Timer0 is already used for millis() - we'll just interrupt somewhere
-    // in the middle and call the "Compare A" function above
-    OCR0A = 0xAF;
-    TIMSK0 |= _BV(OCIE0A);
-  } else {
-    // do not call the interrupt function COMPA anymore
-    TIMSK0 &= ~_BV(OCIE0A);
-  }
-}
-
-void setup() {
-   Serial.begin(9600);
-   Serial.print("Flow sensor test!");
-   lcd.begin(16, 2);
+  // Initialize a serial connection for reporting values to the host
+  Serial.begin(9600);
    
-   pinMode(FLOWSENSORPIN, INPUT);
-   digitalWrite(FLOWSENSORPIN, HIGH);
-   lastflowpinstate = digitalRead(FLOWSENSORPIN);
-   useInterrupt(true);
+  // Set up the status LED line as an output
+  pinMode(statusLed, OUTPUT);
+  digitalWrite(statusLed, HIGH);  // We have an active-low LED attached
+  
+  pinMode(sensorPin, INPUT);
+  digitalWrite(sensorPin, HIGH);
+
+  pulseCount        = 0;
+  flowRate          = 0.0;
+  flowMilliLitres   = 0;
+  totalMilliLitres  = 0;
+  oldTime           = 0;
+
+  // The Hall-effect sensor is connected to pin 2 which uses interrupt 0.
+  // Configured to trigger on a FALLING state change (transition from HIGH
+  // state to LOW state)
+  attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
+
+ lcd.begin(16, 2); // set up the LCD's number of columns and rows: 
+ lcd.clear(); // clear the screen
 }
 
-void loop()                     // run over and over again
-{ 
-  lcd.setCursor(0, 0);
-  lcd.print("Pulses:"); lcd.print(pulses, DEC);
-  lcd.print(" Hz:");
-  lcd.print(flowrate);
-  //lcd.print(flowrate);
-  Serial.print("Freq: "); Serial.println(flowrate);
-  Serial.print("Pulses: "); Serial.println(pulses, DEC);
-  
-  // if a plastic sensor use the following calculation
-  // Sensor Frequency (Hz) = 7.5 * Q (Liters/min)
-  // Liters = Q * time elapsed (seconds) / 60 (seconds/minute)
-  // Liters = (Frequency (Pulses/second) / 7.5) * time elapsed (seconds) / 60
-  // Liters = Pulses / (7.5 * 60)
-  float liters = pulses;
-  liters /= 7.5;
-  liters /= 60.0;
+/**
+ * Main program loop
+ */
+void loop()
+{
+   
+  if((millis() - oldTime) > 1000)    // Only process counters once per second
+  { 
+    // Disable the interrupt while calculating flow rate and sending the value to
+    // the host
+    detachInterrupt(sensorInterrupt);
+        
+    // Because this loop may not complete in exactly 1 second intervals we calculate
+    // the number of milliseconds that have passed since the last execution and use
+    // that to scale the output. We also apply the calibrationFactor to scale the output
+    // based on the number of pulses per second per units of measure (litres/minute in
+    // this case) coming from the sensor.
+    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / calibrationFactor;
+    
+    // Note the time this processing pass was executed. Note that because we've
+    // disabled interrupts the millis() function won't actually be incrementing right
+    // at this point, but it will still return the value it was set to just before
+    // interrupts went away.
+    oldTime = millis();
+    
+    // Divide the flow rate in litres/minute by 60 to determine how many litres have
+    // passed through the sensor in this 1 second interval, then multiply by 1000 to
+    // convert to millilitres.
+    flowMilliLitres = (flowRate / 60) * 1000;
+    
+    // Add the millilitres passed in this second to the cumulative total
+    totalMilliLitres += flowMilliLitres;
+      
+    unsigned int frac;
+    
+    // Print the flow rate for this second in litres / minute
+    Serial.print("Flow rate: ");
+    Serial.print(int(flowRate));  // Print the integer part of the variable
+    Serial.print(" L/min");
+    Serial.print("\t");       // Print tab space
+
+    // Print the cumulative total of litres flowed since starting
+    Serial.print("Output Liquid Quantity: ");        
+    Serial.print(totalMilliLitres);
+    Serial.println("mL"); 
+    Serial.print("\t");       // Print tab space
+    Serial.print(totalMilliLitres);
+    Serial.print(" ML");
+  //lcd.clear(); // clear the screen
+    lcd.setCursor(0, 0); // put cursor at colon 0 and row 0
+    lcd.print(totalMilliLitres); // print a text
+    lcd.print(" ml used");
+    lcd.setCursor(0, 1); // put cursor at colon 0 and row 1
+    lcd.print("Cost:"); // print a text
+    lcd.print(totalMilliLitres*.001);
+    lcd.print(" BDT");
+
+    // Reset the pulse counter so we can start incrementing again
+    pulseCount = 0;
+    
+    // Enable the interrupt again now that we've finished sending output
+    attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
+  }
+}
 
 /*
-  // if a brass sensor use the following calculation
-  float liters = pulses;
-  liters /= 8.1;
-  liters -= 6;
-  liters /= 60.0;
-*/
-  Serial.print(liters); Serial.println(" Liters");
-  lcd.setCursor(0, 1);
-  lcd.print(liters); lcd.print(" Liters        ");
- 
-  delay(100);
+Insterrupt Service Routine
+ */
+void pulseCounter()
+{
+  // Increment the pulse counter
+  pulseCount++;
 }
+
