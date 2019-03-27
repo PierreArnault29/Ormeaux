@@ -1,8 +1,11 @@
-#include <LCD.h>
-#include <LiquidCrystal_SR.h>
-#include <LiquidCrystal.h>
-LiquidCrystal_SR lcd(10, 8, 9); 
-            //  DATA CLOCK LATCH
+/*
+Liquid flow rate sensor -DIYhacking.com Arvind Sanjeev
+
+Measure the liquid/water flow rate using this code. 
+Connect Vcc and Gnd of sensor to arduino, and the 
+signal line to arduino digital pin 2.
+ 
+ */
 
 byte statusLed    = 13;
 
@@ -20,8 +23,6 @@ unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
 
 unsigned long oldTime;
-
-
 
 void setup()
 {
@@ -46,9 +47,6 @@ void setup()
   // Configured to trigger on a FALLING state change (transition from HIGH
   // state to LOW state)
   attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
-
- lcd.begin(16, 2); // set up the LCD's number of columns and rows: 
- lcd.clear(); // clear the screen
 }
 
 /**
@@ -57,7 +55,7 @@ void setup()
 void loop()
 {
    
-  if((millis() - oldTime) > 1000)    // Only process counters once per second
+   if((millis() - oldTime) > 1000)    // Only process counters once per second
   { 
     // Disable the interrupt while calculating flow rate and sending the value to
     // the host
@@ -89,24 +87,17 @@ void loop()
     // Print the flow rate for this second in litres / minute
     Serial.print("Flow rate: ");
     Serial.print(int(flowRate));  // Print the integer part of the variable
-    Serial.print(" L/min");
-    Serial.print("\t");       // Print tab space
+    Serial.print("L/min");
+    Serial.print("\t"); 		  // Print tab space
 
     // Print the cumulative total of litres flowed since starting
     Serial.print("Output Liquid Quantity: ");        
     Serial.print(totalMilliLitres);
     Serial.println("mL"); 
-    Serial.print("\t");       // Print tab space
-    Serial.print(totalMilliLitres);
-    Serial.print(" ML");
-  //lcd.clear(); // clear the screen
-    lcd.setCursor(0, 0); // put cursor at colon 0 and row 0
-    lcd.print(totalMilliLitres); // print a text
-    lcd.print(" ml used");
-    lcd.setCursor(0, 1); // put cursor at colon 0 and row 1
-    lcd.print("Cost:"); // print a text
-    lcd.print(totalMilliLitres*.001);
-    lcd.print(" BDT");
+    Serial.print("\t"); 		  // Print tab space
+	Serial.print(totalMilliLitres/1000);
+	Serial.print("L");
+    
 
     // Reset the pulse counter so we can start incrementing again
     pulseCount = 0;
@@ -124,4 +115,3 @@ void pulseCounter()
   // Increment the pulse counter
   pulseCount++;
 }
-
