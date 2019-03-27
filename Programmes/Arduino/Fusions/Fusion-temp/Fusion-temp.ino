@@ -28,7 +28,11 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 // ---------- Initialisation des variables ---------------------
 
-// Variables propres au DS18B20
+// Variables propres au YF-S201 (Debitmetre)
+volatile int NbTopsFan; //measuring the rising edges of the signal
+int Calc;                               
+int hallsensor = 23;    //The pin location of the sensor
+// Variables propres au DS18B20 (Sonde)
 const int DS18B20_PIN=22;
 const int DS18B20_ID=0x28;
 // Déclaration de l'objet ds
@@ -44,7 +48,7 @@ int idx=1;
 int fenetre;
 int t=0;
 //globales variables addresse
-  unsigned int a=0;
+  unsigned int a;
   unsigned int ok=0;
   int b;
   unsigned int x=2;
@@ -63,10 +67,15 @@ void setup() {
   time = millis();
   time = millis() - time;
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
+  a= EEPROM.read(addr);
+
+  pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
+  attachInterrupt(0, rpm, RISING); //and the interrupt is attached
 }
 
 uint8_t i=0;
 void loop() {
+  debit();
   // print the number of seconds since reset:
 
     compteur=(millis()/1000);
@@ -78,50 +87,56 @@ while (compteur/60==idx){
 while(bouton==1){
   t++;
   if(t==20){
-    ok=0;
+   // ok=0;
 }break;
 t=0;
 }
+//debit();
 switch(menu)
 {
 case 0:
-  lcd.setCursor(1, 0);
-  lcd.print("Initialisation");
-  lcd.setCursor(0, 1);
-  lcd.print("100%");
   initialisation();
   break; 
 //-------------MENU 1 Régler add Lora
 case 1:
-if(ok==0){
-  x=2;
-  lcd.setCursor(0, 0);
-  lcd.print("Entrer Add Lora: ");
-  lcd.setCursor(0, 1);
-  lcd.print("Ox");
-  adresse();
-}
-else{
   lcd.setCursor(0, 0);
   lcd.print("Votre Add Lora: ");
   lcd.setCursor(0, 1);
   lcd.print("Ox");
   lcd.print(a);
-}
+
   break;
  //-------------MENU 2 TEMP + DEBIT  
 case 2: 
-  ok=1;
+ 
   lcd.setCursor(0, 0);
   lcd.print("Temp : ");
   lcd.print(DS18B20_temperature);
   lcd.print(" C");
   lcd.setCursor(0, 1);
   lcd.print("Debit: ");
-  debit();
+  lcd.print(Calc, DEC); //Prints the number calculated above
+  lcd.print (" L/min\r\n"); //Prints "L/hour" and returns a  new line
+  break;
+
+case 3:
+  x=2;
+  lcd.setCursor(0, 0);
+  lcd.print("Entrer Add Lora: ");
+  lcd.setCursor(0, 1);
+  lcd.print("Ox");
+  adresse();
+  break;
+case 4:
+  lcd.setCursor(0, 0);
+  lcd.print(" Reset en cours ");
+  lcd.setCursor(0, 1);
+  lcd.print("Patientez...");
+  clearrom();
+  lcd.clear();
+  menu=3;
   break;
 }
-//case 3:
 
 //-----------SWITCH MENUS---------------
   uint8_t buttons = lcd.readButtons();
@@ -130,47 +145,60 @@ case 2:
 
 switch(bouton){
   case 1: // SELECT
-      
-       if(bouton==1&&t>20){
+      menu=4;
+
+ /**      if(bouton==1&&t>20){
        ok==0;
        t=0;
        }
-      else{
+ /**     else{
       lcd.clear();
       menu++;
       if (menu>3){
         menu=0;
-      }
+        }
+ **/    
       
     break;
-    }
+    
   case 2: // RIGHT
     //  lcd.setCursor(0, 1);
    // lcd.print("Right ");
-     if (menu==0){
+    /** if (menu==0){
       x++;
-    }
+    }**/
+    menu++;
+       if (menu>2){
+        menu=1;
+      }
+    lcd.clear();
     break;
   case 4: // DOWN
     //lcd.setCursor(0, 1);
    // lcd.print("Down ");
-     if (menu==1&&x==2&&ok==0){
+     if (menu==3&&x==2&&ok==0){
     a--;
   }
     break;
   case 8:// UP
   //  lcd.setCursor(0, 1);
   //  lcd.print("UP   ");
-  if (menu==1&&x==2&&ok==0){
+  if (menu==3&&x==2&&ok==0){
     a++;
   }
     break;
   case 16: // LEFT
    // lcd.setCursor(0, 1);
     //lcd.print("Left");
-     if (menu==0){
+   /**  if (menu==0){
       x--;
-    }
+    } **/
+    menu--;
+    if (menu<1){
+        menu=2;
+      }
+
+    lcd.clear();
     break;  
 }
 
@@ -229,6 +257,7 @@ void adresse(){
     }
     rom();
     lcd.print(a);
+    lcd.print(" (1-99)");
   }
   else
   lcd.print("__ (1-99)");
@@ -239,20 +268,55 @@ void adresse(){
   
 }
 void initialisation(){ 
-  lcd.print(bouton);
+  lcd.setCursor(1, 0);
+  lcd.print("Initialisation");
+  lcd.setCursor(6, 1);
+  lcd.print("10%");
+  delay(1000);
+  lcd.setCursor(6, 1);
+  lcd.print("20%");
+  delay(1000);
+    lcd.setCursor(6, 1);
+    lcd.print("30%");
+  delay(1000);
+    lcd.setCursor(6, 1);
+    lcd.print("40%");
+  delay(1000);
+    lcd.setCursor(6, 1);
+    lcd.print("50%");
+  delay(1000);
+    lcd.setCursor(6, 1);
+    lcd.print("100%");
+  delay(1000);
+  lcd.clear();
+  menu=1;
+/**  lcd.print(bouton);
   lcd.print("->");
   lcd.print(t);
+  **/
 }
 void debit(){
-  lcd.print(" ");
-  lcd.print(b);
+  NbTopsFan = 0;   //Set NbTops to 0 ready for calculations
+  sei();      //Enables interrupts
+  delay (1000);   //Wait 1 second
+  cli();      //Disable interrupts
+  Calc = (NbTopsFan/ 5.5); //(Pulse frequency) / 5.5Q, = flow rate 
 }
 void rom(){
   
- /** b=byte(a);
-  EEPROM.write(addr, b);
+  b=byte(a);
+  EEPROM.update(addr, b);
   delay(10);
-  a= EEPROM.read(addr);
-  **/
+  
 }
-
+void clearrom(){
+    for (int i = 0 ; i < EEPROM.length() ; i++) {
+     EEPROM.write(i, 0);
+   }
+}
+void rpm ()     //This is the function that the interupt calls 
+{ 
+  NbTopsFan++;  //This function measures the rising and falling edge of the 
+ 
+//hall effect sensors signal;
+} 
