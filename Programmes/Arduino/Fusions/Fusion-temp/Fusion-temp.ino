@@ -13,7 +13,7 @@ When a button is pressed, the backlight changes color.
 #include <Adafruit_RGBLCDShield.h>
 #include <utility/Adafruit_MCP23017.h>
 #include <EEPROM.h>
-
+#include <LoRa.h>
 #include <SPI.h>
 #include <RH_RF95.h>
 
@@ -43,6 +43,22 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 volatile int NbTopsFan; //measuring the rising edges of the signal
 int Calc;                               
 int hallsensor = 23;    //The pin location of the sensor
+byte sensorInterrupt = 5;  // 0 = digital pin 2
+byte sensorPin       = 18; 
+
+float calibrationFactor = 4.5;
+
+volatile byte pulseCount;  
+
+
+// The hall-effect flow sensor outputs approximately 4.5 pulses per second per
+// litre/minute of flow.
+float flowRate;
+unsigned int flowMilliLitres;
+unsigned long totalMilliLitres;
+
+unsigned long oldTime;
+
 // Variables propres au DS18B20 (Sonde)
 const int DS18B20_PIN=22;
 const int DS18B20_ID=0x28;
@@ -59,32 +75,54 @@ int idx=1;
 int fenetre;
 int t=0;
 //globales variables addresse
+  byte buf[6]; //tab
+  float niveau=0.0;
+  float temp=0.0;
+  unsigned int f=1;
   unsigned int a;
+  unsigned int crc=0;
   unsigned int ok=0;
   int b;
   unsigned int x=2;
   unsigned int y=0;
   int addr = 0; // save données dans la ROM
-  
+//PROTOCOLE PERSO LORA
+#define ADRR 0
+#define FCT 1
+#define TEMP 2//3  //  b1 et b2 // b1 = partie entière, b2 =partie décimale
+#define NIVEAU 4//5  // b2 et b3 idem
+#define CRC 6 
+
+const int csPin = 40;          // LoRa radio chip select
+const int resetPin = 41;       // LoRa radio reset
+const int irqPin = 20; 
+ int counter=0;
 void setup() {
   // Debugging output
-  pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
-  pinMode(RFM95_RST, OUTPUT);
-  digitalWrite(RFM95_RST, HIGH);
+ // pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
+ // pinMode(RFM95_RST, OUTPUT);
+ // digitalWrite(RFM95_RST, HIGH);
   Serial.begin(SERIAL_PORT);
-
+  pinMode(sensorPin, INPUT);
+  digitalWrite(sensorPin, HIGH);
+  pulseCount        = 0;
+  flowRate          = 0.0;
+  flowMilliLitres   = 0;
+  totalMilliLitres  = 0;
+  oldTime           = 0;
+  attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
   
-  Serial.println("Arduino LoRa TX Test!");
+ // Serial.println("Arduino LoRa TX Test!");
     // manual reset
-  digitalWrite(RFM95_RST, LOW);
-  delay(10);
-  digitalWrite(RFM95_RST, HIGH);
-  delay(10);
-    while (!rf95.init()) {
-    Serial.println("LoRa radio init failed"); //initialisation si erreur
-    while (1);
-  }
-  Serial.println("LoRa radio init OK!"); //OKK
+ // digitalWrite(RFM95_RST, LOW);
+ // delay(10);
+ // digitalWrite(RFM95_RST, HIGH);
+ // delay(10);
+ //   while (!rf95.init()) {
+ //   Serial.println("LoRa radio init failed"); //initialisation si erreur
+ //   while (1);
+ // }
+ /** Serial.println("LoRa radio init OK!"); //OKK
 
   // Defaults after init are 434.0MHz, modulation GFSK_Rb250Fd250, +13dbM
   if (!rf95.setFrequency(RF95_FREQ)) {
@@ -101,7 +139,7 @@ void setup() {
   rf95.setTxPower(23, false);
 
 int16_t packetnum = 0;  // packet counter, we increment per xmission
-
+**/
   Serial.println("Initialisation du programme");
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
@@ -113,13 +151,63 @@ int16_t packetnum = 0;  // packet counter, we increment per xmission
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
   a= EEPROM.read(addr);
 
-  attachInterrupt(0, rpm, RISING); //and the interrupt is attached
 }
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 uint8_t i=0;
 
 
 void loop() {   // DEBUT BOUCLE
+    if((millis() - oldTime) > 1000)    // Only process counters once per second
+  { 
+    // Disable the interrupt while calculating flow rate and sending the value to
+    // the host
+    detachInterrupt(sensorInterrupt);
+        
+    // Because this loop may not complete in exactly 1 second intervals we calculate
+    // the number of milliseconds that have passed since the last execution and use
+    // that to scale the output. We also apply the calibrationFactor to scale the output
+    // based on the number of pulses per second per units of measure (litres/minute in
+    // this case) coming from the sensor.
+    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / calibrationFactor;
+    
+    // Note the time this processing pass was executed. Note that because we've
+    // disabled interrupts the millis() function won't actually be incrementing right
+    // at this point, but it will still return the value it was set to just before
+    // interrupts went away.
+    oldTime = millis();
+    
+    // Divide the flow rate in litres/minute by 60 to determine how many litres have
+    // passed through the sensor in this 1 second interval, then multiply by 1000 to
+    // convert to millilitres.
+    flowMilliLitres = (flowRate / 60) * 1000;
+    
+    // Add the millilitres passed in this second to the cumulative total
+    totalMilliLitres += flowMilliLitres;
+      
+    unsigned int frac;
+    
+    // Print the flow rate for this second in litres / minute
+    Serial.print("Flow rate: ");
+    Serial.print(int(flowRate));  // Print the integer part of the variable
+    Serial.print("L/min");
+    Serial.print("\t");       // Print tab space
+
+    // Print the cumulative total of litres flowed since starting
+    Serial.print("Output Liquid Quantity: ");        
+    Serial.print(totalMilliLitres);
+    Serial.println("mL"); 
+    Serial.print("\t");       // Print tab space
+  Serial.print(totalMilliLitres/1000);
+  Serial.print("L");
+    
+
+    // Reset the pulse counter so we can start incrementing again
+    pulseCount = 0;
+    
+    // Enable the interrupt again now that we've finished sending output
+    attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
+  }
+  
  // debit();
   // print the number of seconds since reset:
 
@@ -163,8 +251,8 @@ case 2:
   //debit();
   lcd.setCursor(0, 1);
   lcd.print("Debit: ");
-  lcd.print(Calc, DEC); //Prints the number calculated above
-  lcd.print (" L/min"); //Prints "L/hour" and returns a  new line
+  lcd.print(flowRate); //Prints the number calculated above
+  lcd.print (" L/m "); //Prints "L/hour" and returns a  new line
   
   break;
 
@@ -180,7 +268,7 @@ case 4:
   lcd.setCursor(0, 0);
   lcd.print(" Reset en cours ");
   lcd.setCursor(0, 1);
-  lcd.print("Patientez...");
+  lcd.print("Patientez...   ");
   clearrom();
   lcd.clear();
   menu=3;
@@ -211,7 +299,7 @@ switch(bouton){
     break;
     
   case 2: // RIGHT
-    //envoitrame();
+    envoitrame();
     menu++;
        if (menu>2){
         menu=1;
@@ -255,6 +343,7 @@ byte i;
 byte data[12];
 byte addr[8];
 float temp =0.0;
+
 
 //Il n'y a qu'un seul capteur, donc on charge l'unique adresse.
 ds.search(addr);
@@ -366,7 +455,56 @@ void rpm ()     //This is the function that the interupt calls
 //hall effect sensors signal;
 }
 void envoitrame(){
-    Serial.println("Sending to rf95_server");
+    delay(10);
+    niveau=flowRate;
+    temp=DS18B20_temperature;
+    delay(10);
+    buf[FCT]=byte(f);
+    buf[ADRR]=byte(a);
+    buf[CRC]=byte(crc);
+  while (!Serial);
+
+  Serial.println("LoRa Sender");
+LoRa.setPins(csPin, resetPin, irqPin);
+  if (!LoRa.begin(915E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  Serial.println(niveau);
+      if (temp>25.5){
+      buf[TEMP]=255;
+      temp=temp*10;
+      buf[TEMP+1]=byte(temp-buf[TEMP]);
+      
+    }
+    else
+      buf[TEMP]=byte(temp*10);
+ /**  if (temp2>255){
+      buf[TEMP]=255;
+      buf[TEMP+1]=temp2-255;
+      
+    }
+    else **/
+      
+      if (niveau>25.5){
+      buf[NIVEAU]=255;
+      niveau=niveau*10;
+      buf[NIVEAU+1]=byte(niveau-buf[NIVEAU]);
+      
+    }
+    else  
+    buf[NIVEAU]=byte(niveau*10); 
+
+
+  Serial.print("Sending packet: ");
+  Serial.println(counter);
+
+  // send packet
+  LoRa.beginPacket();
+  LoRa.write(buf,7);
+  LoRa.endPacket();
+}
+ /*   Serial.println("Sending to rf95_server");
     String str1=String(a);
     String str2=String(Calc);
     String str3=String(DS18B20_temperature);
@@ -421,6 +559,14 @@ void envoitrame(){
     Serial.println("No reply, is there a listener around?");
   }
   delay(1000);
-}
+  **/
 
+  
+
+
+void pulseCounter()
+{
+  // Increment the pulse counter
+  pulseCount++;
+}
 
