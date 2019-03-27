@@ -1,11 +1,3 @@
-/*********************
-
-Example code for the Adafruit RGB Character LCD Shield and Library
-
-This code displays text on the shield, and also reads the buttons on the keypad.
-When a button is pressed, the backlight changes color.
-
-**********************/
 
 // include the library code:
 #include <OneWire.h>
@@ -32,10 +24,6 @@ RH_RF95 rf95(RFM95_CS, RFM95_INT);
 // the I2C bus.
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
-// These #defines make it easy to set the backlight color
-#define REVEILLE 0x1
-#define VEILLE 0x2
-
 
 // ---------- Initialisation des variables ---------------------
 
@@ -45,23 +33,18 @@ int Calc;
 int hallsensor = 23;    //The pin location of the sensor
 byte sensorInterrupt = 5;  // 0 = digital pin 2
 byte sensorPin       = 18; 
-
 float calibrationFactor = 4.5;
-
 volatile byte pulseCount;  
-
-
-// The hall-effect flow sensor outputs approximately 4.5 pulses per second per
-// litre/minute of flow.
 float flowRate;
 unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
-
 unsigned long oldTime;
+
 
 // Variables propres au DS18B20 (Sonde)
 const int DS18B20_PIN=22;
 const int DS18B20_ID=0x28;
+
 // Déclaration de l'objet ds
 OneWire ds(DS18B20_PIN); // on pin DS18B20_PIN
 
@@ -74,6 +57,7 @@ int bouton;
 int idx=1;
 int fenetre;
 int t=0;
+
 //globales variables addresse
   byte buf[6]; //tab
   float niveau=0.0;
@@ -85,7 +69,9 @@ int t=0;
   int b;
   unsigned int x=2;
   unsigned int y=0;
+  
   int addr = 0; // save données dans la ROM
+  
 //PROTOCOLE PERSO LORA
 #define ADRR 0
 #define FCT 1
@@ -98,10 +84,7 @@ const int resetPin = 41;       // LoRa radio reset
 const int irqPin = 20; 
  int counter=0;
 void setup() {
-  // Debugging output
- // pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
- // pinMode(RFM95_RST, OUTPUT);
- // digitalWrite(RFM95_RST, HIGH);
+
   Serial.begin(SERIAL_PORT);
   pinMode(sensorPin, INPUT);
   digitalWrite(sensorPin, HIGH);
@@ -111,41 +94,15 @@ void setup() {
   totalMilliLitres  = 0;
   oldTime           = 0;
   attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
-  
- // Serial.println("Arduino LoRa TX Test!");
-    // manual reset
- // digitalWrite(RFM95_RST, LOW);
- // delay(10);
- // digitalWrite(RFM95_RST, HIGH);
- // delay(10);
- //   while (!rf95.init()) {
- //   Serial.println("LoRa radio init failed"); //initialisation si erreur
- //   while (1);
- // }
- /** Serial.println("LoRa radio init OK!"); //OKK
 
-  // Defaults after init are 434.0MHz, modulation GFSK_Rb250Fd250, +13dbM
-  if (!rf95.setFrequency(RF95_FREQ)) {
-    Serial.println("setFrequency failed"); //frequence erreur
-    while (1);
-  }
-  Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
-  
-  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-
-  // The default transmitter power is 13dBm, using PA_BOOST.
-  // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
-  // you can set transmitter powers from 5 to 23 dBm:
-  rf95.setTxPower(23, false);
-
-int16_t packetnum = 0;  // packet counter, we increment per xmission
-**/
   Serial.println("Initialisation du programme");
+  
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
 
   // Print a message to the LCD. We track how long it takes since
   // this library has been optimized a bit and we're proud of it :)
+  
   time = millis();
   time = millis() - time;
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
@@ -207,9 +164,6 @@ void loop() {   // DEBUT BOUCLE
     // Enable the interrupt again now that we've finished sending output
     attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
   }
-  
- // debit();
-  // print the number of seconds since reset:
 
     compteur=(millis()/1000);
 while (compteur/60==idx){
@@ -284,22 +238,9 @@ switch(bouton){
   case 1: // SELECT
       menu=4;
 
- /**      if(bouton==1&&t>20){
-       ok==0;
-       t=0;
-       }
- /**     else{
-      lcd.clear();
-      menu++;
-      if (menu>3){
-        menu=0;
-        }
- **/    
-      
     break;
     
   case 2: // RIGHT
-    envoitrame();
     menu++;
        if (menu>2){
         menu=1;
@@ -321,11 +262,8 @@ switch(bouton){
   }
     break;
   case 16: // LEFT
-   // lcd.setCursor(0, 1);
-    //lcd.print("Left");
-   /**  if (menu==0){
-      x--;
-    } **/
+
+
     menu--;
     if (menu<1){
         menu=2;
@@ -424,18 +362,7 @@ void initialisation(){
   delay(1000);
   lcd.clear();
   menu=1;
-/**  lcd.print(bouton);
-  lcd.print("->");
-  lcd.print(t);
-  **/
 }
-/**void debit(){
-  NbTopsFan = 0;   //Set NbTops to 0 ready for calculations
-  sei();      //Enables interrupts
-  delay (1000);   //Wait 1 second
-        //Disable interrupts
-  Calc = (NbTopsFan/ 5.5); //(Pulse frequency) / 5.5Q, = flow rate 
-} **/
 void rom(){
   
   b=byte(a);
@@ -479,12 +406,6 @@ LoRa.setPins(csPin, resetPin, irqPin);
     }
     else
       buf[TEMP]=byte(temp*10);
- /**  if (temp2>255){
-      buf[TEMP]=255;
-      buf[TEMP+1]=temp2-255;
-      
-    }
-    else **/
       
       if (niveau>25.5){
       buf[NIVEAU]=255;
@@ -504,65 +425,6 @@ LoRa.setPins(csPin, resetPin, irqPin);
   LoRa.write(buf,7);
   LoRa.endPacket();
 }
- /*   Serial.println("Sending to rf95_server");
-    String str1=String(a);
-    String str2=String(Calc);
-    String str3=String(DS18B20_temperature);
-    String str=String(";")+str1+";"+str2+";"+str3;
-    
-    char buffer[30];
-    char *tab = buffer;
-    Serial.print("Taille du TAB: ");
-    Serial.println(sizeof(tab)); 
-    
-    Serial.print("Taille: a -> ");
-    Serial.println(sizeof(a));
-        Serial.print("Taille: Temp -> ");
-        Serial.println(sizeof(DS18B20_temperature));
-            Serial.print("Taille: Niveau -> ");
-            Serial.println(sizeof(Calc));
-            
-    char radiopacket[20] = "";
-   
-   str.toCharArray (radiopacket, 20); 
-    itoa(packetnum++, radiopacket+13, 10);
-    
-    Serial.print("Envoi Donnees: "); Serial.println(radiopacket);
-    radiopacket[19] = 0;
-     Serial.println("Envoi en cours..."); delay(10);
-  rf95.send((uint8_t *)radiopacket, 30);
-
-  Serial.println("En attente du transfert..."); delay(10);
-  rf95.waitPacketSent();
-  // Now wait for a reply
-  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-  uint8_t len = sizeof(buf);
-
-  Serial.println("En attente de la reponse..."); delay(10);
-  if (rf95.waitAvailableTimeout(1000))
-  { 
-    // Should be a reply message for us now   
-    if (rf95.recv(buf, &len))
-   {
-      Serial.print("Message recu: ");
-      Serial.println((char*)buf);
-      Serial.print("RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);    
-    }
-    else
-    {
-      Serial.println("Message non recu");
-    }
-  }
-  else
-  {
-    Serial.println("No reply, is there a listener around?");
-  }
-  delay(1000);
-  **/
-
-  
-
 
 void pulseCounter()
 {
