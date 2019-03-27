@@ -1,96 +1,77 @@
-#include <SPI.h>
-#include <LoRa.h>
+unsigned int a=10;
+unsigned int f=1;
+unsigned int crc=0;
+float temp=28.2;
+byte buf[6];
+float niveau=24.9;
 
-// Arduino9x_RX
-// -*- mode: C++ -*-
-// Example sketch showing how to create a simple messaging client (receiver)
-// with the RH_RF95 class. RH_RF95 class does not provide for addressing or
-// reliability, so you should only use RH_RF95 if you do not need the higher
-// level messaging abilities.
-// It is designed to work with the other example Arduino9x_TX
-
-#include <SPI.h>
-#include <RH_RF95.h>
-
-#define RFM95_CS 31
-#define RFM95_RST 33
-#define RFM95_INT 32
-
-// Change to 434.0 or other frequency, must match RX's freq!
-#define RF95_FREQ 915.0
-
-// Singleton instance of the radio driver
-RH_RF95 rf95(RFM95_CS, RFM95_INT);
-
-// Blinky on receipt
-#define LED 13
-
-void setup() 
-{
-  pinMode(LED, OUTPUT);     
-  pinMode(RFM95_RST, OUTPUT);
-  digitalWrite(RFM95_RST, HIGH);
-
-  while (!Serial);
+#define ADRR 0
+#define FCT 1
+#define TEMP 2//3  //  b1 et b2 // b1 = partie entière, b2 =partie décimale
+#define NIVEAU 4//5  // b2 et b3 idem
+#define CRC 6   
+void setup() {
+  // put your setup code here, to run once:
   Serial.begin(9600);
-  delay(100);
+    buf[FCT]=byte(f);
+    buf[ADRR]=byte(a);
+    buf[CRC]=byte(crc);
+  //  int temp2=temp*10;
 
-  Serial.println("Arduino LoRa RX Test!");
-  
-  // manual reset
-  digitalWrite(RFM95_RST, LOW);
-  delay(10);
-  digitalWrite(RFM95_RST, HIGH);
-  delay(10);
-
-  while (!rf95.init()) {
-    Serial.println("LoRa radio init failed");
-    while (1);
-  }
-  Serial.println("LoRa radio init OK!");
-
-  // Defaults after init are 434.0MHz, modulation GFSK_Rb250Fd250, +13dbM
-  if (!rf95.setFrequency(RF95_FREQ)) {
-    Serial.println("setFrequency failed");
-    while (1);
-  }
-  Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
-
-  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-
-  // The default transmitter power is 13dBm, using PA_BOOST.
-  // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
-  // you can set transmitter powers from 5 to 23 dBm:
-  rf95.setTxPower(23, false);
-}
-
-void loop()
-{
-  if (rf95.available())
-  {
-    // Should be a message for us now   
-    uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-    uint8_t len = sizeof(buf);
-    
-    if (rf95.recv(buf, &len))
-    {
-      digitalWrite(LED, HIGH);
-      RH_RF95::printBuffer("Received: ", buf, len);
-      Serial.print("Got: ");
-      Serial.println((char*)buf);
-       Serial.print("RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);
+       if (temp>25.5){
+      buf[TEMP]=255;
+      temp=temp*10;
+      buf[TEMP+1]=byte(temp-buf[TEMP]);
       
-      // Send a reply
-      uint8_t data[] = "And hello back to you";
-      rf95.send(data, sizeof(data));
-      rf95.waitPacketSent();
-      Serial.println("Sent a reply");
-      digitalWrite(LED, LOW);
     }
     else
-    {
-      Serial.println("Receive failed");
+      buf[TEMP]=byte(temp*10);
+ /**  if (temp2>255){
+      buf[TEMP]=255;
+      buf[TEMP+1]=temp2-255;
+      
     }
-  }
+    else */
+       if (niveau>25.5){
+      buf[NIVEAU]=255;
+      niveau=niveau*10;
+      buf[NIVEAU+1]=byte(niveau-buf[NIVEAU]);
+      
+    }
+    else  
+    buf[NIVEAU]=byte(niveau*10); 
+    
+    Serial.print("Taille du TAB: ");
+    Serial.println(sizeof(buf)); 
+    
+    Serial.println("PROTOCOLE"); 
+     Serial.print("Fonction: Ox");
+    Serial.println(buf[FCT]);
+    Serial.print("Adresse: Ox");
+    Serial.println(buf[ADRR]);
+    Serial.print("Temp: "); 
+    Serial.print("[");
+    Serial.print(buf[TEMP]);
+    Serial.print("]");
+    Serial.print("[");
+    Serial.print(buf[TEMP+1]);
+    Serial.println("]");
+    
+    Serial.print("Niveau: "); 
+    Serial.print("[");    
+    Serial.print(buf[NIVEAU]);
+    Serial.print("]");
+    Serial.print("[");    
+    Serial.print(buf[NIVEAU+1]);
+    Serial.println("]"); 
+    Serial.print("CRC= ");
+    Serial.println(buf[CRC]);    
+    delay(100);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  
+
+
 }
