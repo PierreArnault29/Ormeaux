@@ -57,6 +57,7 @@ int t=0;
   
 void setup() {
   // Debugging output
+  pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
   Serial.begin(SERIAL_PORT);
   Serial.println("Initialisation du programme");
   // set up the LCD's number of columns and rows: 
@@ -69,7 +70,6 @@ void setup() {
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
   a= EEPROM.read(addr);
 
-  pinMode(hallsensor, INPUT); //initializes digital pin 23 as an input
   attachInterrupt(0, rpm, RISING); //and the interrupt is attached
 }
 
@@ -91,6 +91,7 @@ while(bouton==1){
 }break;
 t=0;
 }
+
 //debit();
 switch(menu)
 {
@@ -113,10 +114,12 @@ case 2:
   lcd.print("Temp : ");
   lcd.print(DS18B20_temperature);
   lcd.print(" C");
+  //debit();
   lcd.setCursor(0, 1);
   lcd.print("Debit: ");
   lcd.print(Calc, DEC); //Prints the number calculated above
-  lcd.print (" L/min\r\n"); //Prints "L/hour" and returns a  new line
+  lcd.print (" L/min"); //Prints "L/hour" and returns a  new line
+  
   break;
 
 case 3:
@@ -299,7 +302,7 @@ void debit(){
   NbTopsFan = 0;   //Set NbTops to 0 ready for calculations
   sei();      //Enables interrupts
   delay (1000);   //Wait 1 second
-  cli();      //Disable interrupts
+        //Disable interrupts
   Calc = (NbTopsFan/ 5.5); //(Pulse frequency) / 5.5Q, = flow rate 
 }
 void rom(){
@@ -319,4 +322,4 @@ void rpm ()     //This is the function that the interupt calls
   NbTopsFan++;  //This function measures the rising and falling edge of the 
  
 //hall effect sensors signal;
-} 
+}
