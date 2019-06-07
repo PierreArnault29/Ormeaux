@@ -93,6 +93,7 @@ int pin2=44;
   int b;
   unsigned int x=2; // position sur le LCD (x,y)
   unsigned int y=0;
+  int bat=0; //%batterie
   
   int addr = 0; // save données dans la ROM
   
@@ -531,9 +532,25 @@ void batterie(){
   //Serial.print(analogRead(A15));
   valeur=analogRead(A15);
   float tension=valeur*((5.0/1023.0)*3.24); //coef pont diviseur
+   if((15>=tension)&&(tension>12.5)){
+    bat=((tension-12.1666)/(0.0083));
+  }
+   else if((12.5>=tension)&&(tension>12)){
+    bat=((tension-11.5)/(0.025));
+  }
+   else if((12>=tension)&&(tension>11)){
+    bat=((tension-10)/(0.1));
+  }
+   else if((11>=tension)&&(tension>8)){
+    bat=((tension-8)/(0.3));
+  }
+   else if(tension<=8){
+    bat=0;
+  }
+
   lcd.print("   ");
   lcd.print("Bat:");
-  lcd.print(tension);
-  lcd.print("V");
+  lcd.print(bat);
+  lcd.print("%");
 }
 
